@@ -1,0 +1,403 @@
+%! TEX root = ../main.tex
+\documentclass[main]{subfiles}
+
+\begin{document}
+\chapter{課題6}
+\section{目的・概要}
+課題6では,PL-0コンパイラ(図\ref{fig:PL-0})を完成させ,実際にコンパイルを行うことができるか確認した.
+
+\section{使用機器・ソフトウェア}
+\begin{itemize}
+    \item Cent OS version 6.4(64ビット版)
+    \item Python 3.9.16
+    \item PLYパッケージ
+\end{itemize}
+
+\section{作業内容・プログラムの内容}
+\subsection{作業内容}
+\section{手続きと局所変数を扱えるようにするための追記した処理}
+この課題では,課題5で作成したファイルに手続きと局所変数を扱えるように追加実装を行った.
+ここで追加実装を行ったファイルはcompiler.py,llvmcode.pyであった.
+
+\begin{oframed}
+\begin{itemize}
+    \item 関数名で検索し,Fundefオブジェクトを返すlookupFundef関数を実装.
+    \item \verb|proc_decl -> PROCEDURE proc_name LPAREN RPAREN SEMICOLON inblock|の規則でret命令のコード生成を実装.
+    \item \verb|proc_name -> IDENT|の規則で関数を管理するfundefsの配列にFundefオブジェクトを追加する処理を実装.
+    \item \verb|assignment_statement -> IDENT ASSIGN expression|の規則で局所変数のスコープに対応する処理を実装.
+    \item \verb|for_statement -> FOR IDENT ASSIGN expression for_act1 TO expression for_act2 DO statement|の規則で局所変数のスコープに対応する処理を実装.
+    \item \verb|for_act1 -> /* empty */|の規則で局所変数のスコープに対応する処理を実装.
+    \item \verb|for_act2 -> /* empty */|の規則で局所変数のスコープに対応する処理を実装.
+    \item \verb|proc_call_name -> IDENT|の規則で呼び出す命令のコード生成を実装.
+    \item \verb|var_name -> IDENT|の規則で局所変数のスコープに対応する処理を実装.
+    \item \verb|id_list -> IDENT|,\verb|id_list -> id_list COMMMA IDENT|の規則で局所変数のスコープに対応する処理を実装.
+    \item 関数の呼び出しを行うコード生成のためのLLVMCodeCallStatementクラスを実装.
+    \item 局所変数の宣言を行うコード生成のためのLLVMCodeAllocaクラスを実装.
+\end{itemize}
+\end{oframed}
+\subsection{プログラムの内容}
+上記の実装を行った各ファイルを以下に示す.
+\lstinputlisting[caption=kadai6/compiler.py,label=code:kadai6/compiler.py,language=Python]{../src/kadai6/compiler.py}
+\lstinputlisting[caption=kadai6/fundef.py,label=code:kadai6/fundef.py,language=Python]{../src/kadai6/fundef.py}
+\lstinputlisting[caption=kadai6/llvmcode.py,label=code:kadai6/llvmcode.py,language=Python]{../src/kadai6/llvmcode.py}
+\lstinputlisting[caption=kadai6/operand.py,label=code:kadai6/operand.py,language=Python]{../src/kadai6/operand.py}
+\lstinputlisting[caption=kadai6/symtab.py,label=code:kadai6/symtab.py,language=Python]{../src/kadai6/symtab.py}
+
+\section{動作確認の結果}
+以下にpl0a,p,pl0b.p,pl0c.pをコンパイルした際の出力とコンパイルしたプログラムの実行を示す.
+\subsection{pl0a.p}
+まず,pl0a.pを示す.
+pl0a.pには1から入力された数字までの整数それぞれを2乗した数字を出力するプログラムが書かれている.
+\lstinputlisting[caption=test-source/pl0a.p,label=code:test-source/pl0a.p,language=Pascal]{../src/test-source/pl0a.p}
+以下のコマンドを実行してコンパイルを行った.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0a.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0a.pの出力]
+python3 compiler.py pl0a.p
+insert:
+[(n,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (square,Scope.PROC)]
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+delete:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (square,Scope.PROC)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+\end{lstlisting}
+コンパイルで生成されたファイルは以下である.
+\begin{lstlisting}[caption=pl0a.pのコンパイルで生成されたresult.ll,language=LLVM]
+@n = common global i32 0, align 4
+@x = common global i32 0, align 4
+@i = common global i32 0, align 4
+
+define void @square() {
+    %1 = load i32, i32* @x, align 4
+    %2 = load i32, i32* @x, align 4
+    %3 = mul nsw i32 %1, %2
+    %4 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.w, i64 0, i64 0), i32 %3)
+    ret void
+}
+
+define i32 @main() {
+    %1 = call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.r, i64 0, i64 0), i32* @n)
+    store i32 1, i32* @x, align 4
+    br label %L1
+    L1:
+    %2 = load i32, i32* @x, align 4
+    %3 = load i32, i32* @n, align 4
+    %4 = icmp sle i32 %2, %3
+    br i1 %4, label %L2, label %L3
+    L2:
+    call void @square()
+    %5 = load i32, i32* @x, align 4
+    %6 = add nsw i32 %5, 1
+    store i32 %6, i32* @x, align 4
+    br label %L1
+    L3:
+    ret i32 0
+}
+
+declare i32 @printf(i8*, ...)
+@.str.w = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+declare i32 @scanf(i8*, ...)
+@.str.r = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+\end{lstlisting}
+以下のコマンドを実行してコンパイルされたプログラムを実行した.
+\begin{oframed}
+\begin{verbatim}
+lli result.ll
+\end{verbatim}
+\end{oframed}
+実行すると入力待機状態となり,数字を入力すると1から入力した数それぞれの2乗が出力された.
+\begin{lstlisting}[caption=pl0a.pをコンパイルしたプログラムを実行]
+lli result.ll
+6
+1
+4
+9
+16
+25
+36
+\end{lstlisting}
+想定された挙動を示したため,正しくコンパイラを実装することが出来たと考えられる.
+
+\subsection{pl0b.p}
+まず,pl0b.pを示す.
+pl0b.pには2から入力された値までの素数を出力するプログラムが書かれている.
+\lstinputlisting[caption=test-source/pl0b.p,label=code:test-source/pl0b.p,language=Pascal]{../src/test-source/pl0b.p}
+以下のコマンドを実行してコンパイルを行った.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0b.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0b.pの出力]
+python3 compiler.py pl0b.p
+insert:
+[(n,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (prime,Scope.PROC)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (prime,Scope.PROC), (n,Scope.LOCAL_VAR)]
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.LOCAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+delete:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (prime,Scope.PROC)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+\end{lstlisting}
+コンパイルで生成されたファイルは以下である.
+\begin{lstlisting}[caption=pl0b.pのコンパイルで生成されたresult.ll,language=LLVM]
+@n = common global i32 0, align 4
+@x = common global i32 0, align 4
+@i = common global i32 0, align 4
+
+define void @prime() {
+    %n = alloca i32, align 4
+    %1 = load i32, i32* @x, align 4
+    %2 = sdiv i32 %1, 2
+    store i32 %2, i32* %n, align 4
+    br label %L1
+    L1:
+    %3 = load i32, i32* @x, align 4
+    %4 = load i32, i32* @x, align 4
+    %5 = load i32, i32* %n, align 4
+    %6 = sdiv i32 %4, %5
+    %7 = load i32, i32* %n, align 4
+    %8 = mul nsw i32 %6, %7
+    %9 = icmp ne i32 %3, %8
+    br i1 %9, label %L2, label %L3
+    L2:
+    %10 = load i32, i32* %n, align 4
+    %11 = sub nsw i32 %10, 1
+    store i32 %11, i32* %n, align 4
+    br label %L1
+    L3:
+    %12 = load i32, i32* %n, align 4
+    %13 = icmp eq i32 %12, 1
+    br i1 %13, label %L4, label %L5
+    L4:
+    %14 = load i32, i32* @x, align 4
+    %15 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.w, i64 0, i64 0), i32 %14)
+    br label %L6
+    L5:
+    br label %L6
+    L6:
+    ret void
+}
+
+define i32 @main() {
+    %1 = call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.r, i64 0, i64 0), i32* @n)
+    store i32 2, i32* @i, align 4
+    br label %L7
+    L7:
+    %2 = load i32, i32* @n, align 4
+    %3 = load i32, i32* @i, align 4
+    %4 = icmp sle i32 %3, %2
+    br i1 %4, label %L8, label %L9
+    L8:
+    %5 = load i32, i32* @i, align 4
+    store i32 %5, i32* @x, align 4
+    call void @prime()
+    %6 = load i32, i32* @i, align 4
+    %7 = add nsw i32 %6, 1
+    store i32 %7, i32* @i, align 4
+    br label %L7
+    L9:
+    ret i32 0
+}
+
+declare i32 @printf(i8*, ...)
+@.str.w = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+declare i32 @scanf(i8*, ...)
+@.str.r = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+\end{lstlisting}
+以下のコマンドを実行してコンパイルされたプログラムを実行した.
+\begin{oframed}
+\begin{verbatim}
+lli result.ll
+\end{verbatim}
+\end{oframed}
+実行すると入力待機状態となり,数字を入力すると1から入力した数までの素数が出力された.
+\begin{lstlisting}[caption=pl0b.pをコンパイルしたプログラムを実行]
+lli result.ll
+20
+2
+3
+5
+7
+11
+13
+17
+19
+\end{lstlisting}
+想定された挙動を示したため,正しくコンパイラを実装することが出来たと考えられる.
+
+\subsection{pl0c.p}
+まず,pl0c.pを示す.
+pl0c.pには再帰呼び出しを使って入力した数の階乗を出力するプログラムが書かれている.
+\lstinputlisting[caption=test-source/pl0c.p,label=tcode:est-source/pl0c.p,language=Pascal]{../src/test-source/pl0c.p}
+以下のコマンドを実行してコンパイルを行った.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0c.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0c.pの出力]
+python3 compiler.py pl0c.p
+insert:
+[(n,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC), (m,Scope.LOCAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC), (m,Scope.LOCAL_VAR), (temp,Scope.LOCAL_VAR)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:m,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+lookup:
+name:m,scope:Scope.LOCAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+delete:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+\end{lstlisting}
+コンパイルで生成されたファイルは以下である.
+\begin{lstlisting}[caption=pl0c.pのコンパイルで生成されたresult.ll,language=LLVM]
+@n = common global i32 0, align 4
+@res = common global i32 0, align 4
+
+define void @fact() {
+    %m = alloca i32, align 4
+    %temp = alloca i32, align 4
+    %1 = load i32, i32* @n, align 4
+    %2 = icmp sle i32 %1, 1
+    br i1 %2, label %L1, label %L2
+    L1:
+    store i32 1, i32* %temp, align 4
+    br label %L3
+    L2:
+    %3 = load i32, i32* @n, align 4
+    store i32 %3, i32* %m, align 4
+    %4 = load i32, i32* @n, align 4
+    %5 = sub nsw i32 %4, 1
+    store i32 %5, i32* @n, align 4
+    call void @fact()
+    %6 = load i32, i32* @res, align 4
+    %7 = load i32, i32* %m, align 4
+    %8 = mul nsw i32 %6, %7
+    store i32 %8, i32* %temp, align 4
+    br label %L3
+    L3:
+    %9 = load i32, i32* %temp, align 4
+    store i32 %9, i32* @res, align 4
+    ret void
+}
+
+define i32 @main() {
+    %1 = call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.r, i64 0, i64 0), i32* @n)
+    call void @fact()
+    %2 = load i32, i32* @res, align 4
+    %3 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.w, i64 0, i64 0), i32 %2)
+    ret i32 0
+}
+
+declare i32 @printf(i8*, ...)
+@.str.w = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+declare i32 @scanf(i8*, ...)
+@.str.r = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+\end{lstlisting}
+以下のコマンドを実行してコンパイルされたプログラムを実行した.
+\begin{oframed}
+\begin{verbatim}
+lli result.ll
+\end{verbatim}
+\end{oframed}
+実行すると入力待機状態となり,数字を入力すると入力した数の階乗が出力された.
+\begin{lstlisting}[caption=pl0c.pをコンパイルしたプログラムを実行]
+lli result.ll
+5
+120
+\end{lstlisting}
+想定された挙動を示したため,正しくコンパイラを実装することが出来たと考えられる.
+
+\end{document}

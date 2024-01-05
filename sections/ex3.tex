@@ -1,0 +1,247 @@
+%! TEX root = ../main.tex
+\documentclass[main]{subfiles}
+
+\begin{document}
+\chapter{課題3}
+\section{目的・概要}
+課題3では記号表とその操作関数を作成し,実際に適切なタイミングで操作関数を呼び出すことができるかを確認した.
+
+\section{使用機器・ソフトウェア}
+\begin{itemize}
+    \item Cent OS version 6.4(64ビット版)
+    \item Python 3.9.16
+    \item PLYパッケージ
+\end{itemize}
+
+\section{作業内容・プログラムの内容}
+\subsection{作業内容}
+記号名とスコープ(大域/局所変数や手続きの区別)を管理する記号表を定義し,記号表に対する以下の操作関数を実装した.
+\begin{oframed}
+\textbf{操作関数}
+\begin{itemize}
+    \item 記号表への変数・手続きの登録(insert)
+    \item 変数・手続きの検索(lookup)
+    \item 記号表から局所変数の削除(delete)
+\end{itemize}
+\end{oframed}
+また,構文解析において適切なところで操作関数が呼び出されるように操作関数の呼び出しを追加した.
+その際,操作関数に応じて以下のことを標準出力するようにした.
+\begin{oframed}
+\textbf{出力内容}
+\begin{itemize}
+    \item insert:要素登録後の記号表のデータ全体
+    \item lookup:検索された名前と,検索にヒットした要素のスコープ
+    \item delete:削除後の記号表のデータ全体
+\end{itemize}
+\end{oframed}
+
+\subsection{プログラムの内容}
+\subsubsection{記号表の操作関数の実装}
+記号表はSymbolTableクラス(Listing\ref{code:kadai3/symtab.py})によって定義した.
+SymbolTableクラスは配列をもち,配列の要素はSymbolクラスのオブジェクトとした(Listing\ref{code:kadai3/symtab.py}).
+Symbolクラス(Listing\ref{code:kadai3/symtab.py})は変数や手続きの記号の情報を表現しており,記号名とそのスコープをプロパティとして持つように実装した.
+記号表であるSymbolTableクラスにinsert,lookup,deleteのメソッドを追加することによって記号表を実現した.
+insertメソッドは記号の情報である記号名とスコープを引数にもち,それを配列に追加する機能を持つ.
+lookupメソッドは検索したい記号名を引数にもち,記号表に格納されている記号名を挿入した順番と逆の順で調べ,その情報を返す機能を持つ.
+deleteメソッドは引数を持たず,記号表を挿入された順番と逆の順に調べてスコープが手続きであるものを初めて見つけた際に調べた記号を全て削除する機能を持つ.
+また,それぞれの関数は関数を実行した際に適切な出力を行う機能を持つ.
+これらの機能を実装したsymtab.pyを以下に示す.
+\lstinputlisting[caption=kadai3/symtab.py,label=code:kadai3/symtab.py,language=Python]{../src/kadai3/symtab.py}
+
+\subsubsection{操作関数を呼び出す場所}
+insertメソッドを呼び出す場所は新たに記号が定義される場所と一致するはずであり,かつその記号名を取得できる場所である必要があるため,以下の場所で呼び出すように実装した.
+\begin{lstlisting}[caption=insertメソッドを呼び出す場所,language=Python]
+def p_proc_name(p):
+    '''
+    proc_name : IDENT
+    '''
+    symtable.insert(p[1],Scope.PROC)
+    global varscope
+    varscope = Scope.LOCAL_VAR
+
+def p_id_list(p):
+    '''
+    id_list : IDENT
+            | id_list COMMA IDENT
+    '''
+    if len(p) == 2:
+        symtable.insert(p[1],varscope)
+    else:
+        symtable.insert(p[3],varscope)
+\end{lstlisting}
+lookupメソッドを呼び出す場所は,すでに定義された記号名を呼び出す場所であるため,以下の場所で呼び出すように実装した.
+\begin{lstlisting}[caption=lookupメソッドを呼び出す場所,language=Python]
+def p_assignment_statement(p):
+    '''
+    assignment_statement : IDENT ASSIGN expression
+    '''
+    symtable.lookup(p[1])
+
+def p_for_statement(p):
+    '''
+    for_statement : FOR IDENT ASSIGN expression for_act TO expression DO statement
+    '''
+
+def p_for_act(p):
+    '''
+    for_act : 
+    '''
+    symtable.lookup(p[-3])
+
+def p_proc_call_name(p):
+    '''
+    proc_call_name : IDENT
+    '''
+    symtable.lookup(p[1])
+
+def p_read_statement(p):
+    '''
+    read_statement : READ LPAREN IDENT RPAREN
+    '''
+    symtable.lookup(p[3])
+
+def p_var_name(p):
+    '''
+    var_name : IDENT
+    '''
+    symtable.lookup(p[1])
+\end{lstlisting}
+deleteメソッドを呼び出す場所は,手続きを読み終わったタイミングであるため,以下の場所で呼び出すように実装した.
+\begin{lstlisting}[caption=deleteメソッドを呼び出す場所,language=Python]
+def p_proc_decl(p):
+    '''
+    proc_decl : PROCEDURE proc_name LPAREN RPAREN SEMICOLON inblock
+    '''
+    symtable.delete()
+\end{lstlisting}
+
+上記を実装したcompiler.pyを以下に示す.
+\lstinputlisting[caption=kadai3/compiler.py,label=code:kadai3/compiler.py,language=Python]{../src/kadai3/compiler.py}
+
+\section{動作確認の結果}
+以下にpl0a.p,pl0b.p,pl0c.pに対するコンパイルの実行例を示す.
+\subsection{pl0a.pのコンパイル}
+まず,pl0a.pを示す.
+\lstinputlisting[caption=test-source/pl0a.p,label=code:test-source/pl0a.p,language=Pascal]{../src/test-source/pl0a.p}
+
+以下のコマンドを実行した.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0a.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0a.pの出力]
+insert:
+[(n,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (square,Scope.PROC)]
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+delete:
+[(n,Scope.GLOBAL_VAR), (x,Scope.GLOBAL_VAR), (i,Scope.GLOBAL_VAR), (square,Scope.PROC)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:square,scope:Scope.PROC
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+\end{lstlisting}
+
+\subsection{pl0b.pのコンパイル}
+まず,pl0b.pを示す.
+\lstinputlisting[caption=test-source/plob.p,label=code:test-source/pl0b.p,language=Pascal]{../src/test-source/pl0b.p}
+
+以下のコマンドを実行した.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0b.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0c.pの出力]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:i,scope:Scope.GLOBAL_VAR
+lookup:
+name:x,scope:Scope.GLOBAL_VAR
+lookup:
+name:prime,scope:Scope.PROC
+\end{lstlisting}
+
+\subsection{pl0c.pのコンパイル}
+まず,pl0c.pを示す.
+\lstinputlisting[caption=test-source/pl0c.p,label=code:test-source/pl0c.p,language=Pascal]{../src/test-source/pl0c.p}
+以下のコマンドを実行した.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0c.p
+\end{verbatim}
+\end{oframed}
+上記の出力結果を以下に示す.
+\begin{lstlisting}[caption=python3 compiler.py pl0c.pの出力]
+insert:
+[(n,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC), (m,Scope.LOCAL_VAR)]
+insert:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC), (m,Scope.LOCAL_VAR), (temp,Scope.LOCAL_VAR)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:m,scope:Scope.LOCAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:fact,scope:Scope.PROC
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+lookup:
+name:m,scope:Scope.LOCAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:temp,scope:Scope.LOCAL_VAR
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+delete:
+[(n,Scope.GLOBAL_VAR), (res,Scope.GLOBAL_VAR), (fact,Scope.PROC)]
+lookup:
+name:n,scope:Scope.GLOBAL_VAR
+lookup:
+name:fact,scope:Scope.PROC
+lookup:
+name:res,scope:Scope.GLOBAL_VAR
+\end{lstlisting}
+
+pl0a.p,pl0b.p,pl0c.pとそれぞれの出力結果を比較すると,ソースコードを上から順に読み進めながら,記号の宣言や呼び出し,手続きの終了の際に適切にinsert,lookup,deleteのメソッドを呼び出せていることを確認できた.
+\end{document}

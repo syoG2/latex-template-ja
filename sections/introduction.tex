@@ -1,0 +1,148 @@
+%! TEX root = ../main.tex
+\documentclass[main]{subfiles}
+
+\begin{document}
+\chapter{はじめに}
+この実験ではPascalに基づく簡単なプログラミング言語を対象言語としてLLVM IRで記述された目的プログラムを生成するコンパイラを作成した.
+その作成を通してコンパイラに対する理解を深めた.
+簡単なコンパイラから機能拡張を施す形でコンパイラの作成をした.
+
+以下に課題1,課題2で行った実装の簡単な説明をする.
+
+\section{使用機器・ソフトウェア}
+\begin{itemize}
+    \item Cent OS version 6.4(64ビット版)
+    \item Python 3.9.16
+    \item PLYパッケージ
+\end{itemize}
+PLYパッケージのインストールのために以下のコマンドを実行した.
+\begin{oframed}
+\begin{verbatim}% pip3 install --user ply\end{verbatim}
+\end{oframed}
+この実験ではICEの環境を用いたが,ICE環境にはPython 2.7.5とPython 3.9.16が存在しているためpipではなくpip3を用いなければPython 3.9.16に対して正しくPLYパッケージをインストールできなかった.
+\section{課題1}
+以下の仕様をPL-0と定義し,PL-0の字句解析をするプログラムを作成した.
+実装は予約語や演算子などの切り出す文字列を定義することで行った.
+\begin{oframed}
+    \label{fig:PL-0}
+    \textbf{PL-0 の仕様}
+    \begin{itemize}
+        \item データ型は整数型のみが存在する．
+        \item (引数と戻り値を持たない)手続きが定義でき，再帰呼び出しが可能である．
+        \item 名前(変数名と手続き名)の有効範囲は標準Pascalと同じである.ただし,手続き定義の入れ子の深さは1までとする.つまり,手続きの中で他の手続きを定義できない.
+        \item 制御文は次の4種類が存在する.
+        \begin{itemize}
+            \item if ... then ... else (条件分岐)
+            \item while ... do ... (whileループ)
+            \item for ... do ... (forループ)
+            \item begin ...; ...; ... end (複合文)
+        \end{itemize}
+        \item 整数値の標準入出力のための命令文readとwriteが存在する.
+    \end{itemize}
+\end{oframed}
+
+\section{課題2}
+PL-0の構文解析をするプログラムを作成した.
+実装は以下の構文規則を実装することで行った.
+また,構文解析エラーが生じた際に,どの部分でエラーが生じたのかを表示するエラー処理を実装した.
+\begin{oframed}
+\begin{verbatim}
+<program> ::= 'program' 'IDENT' ';' <outblock> '.'
+<outblock> ::= <var_decl_part> <subprog_decl_part> <statement>
+<var_decl_part> ::= <var_decl_list> ';'
+                  | /* empty */
+<var_decl_list> ::= <var_decl_list> ';' <var_decl>
+                  | <var_decl>
+<var_decl> ::= 'var' <id_list>
+<subprog_decl_part> ::= <subprog_decl_list> ';'
+                      | /* empty */
+<subprog_decl_list> ::= <subprog_decl_list> ';' <subprog_decl>
+                      | <subprog_decl>
+<subprog_decl> ::= <proc_decl>
+<proc_decl> ::= 'procedure' <proc_name> '(' ')' ';' <inblock>
+<proc_name> ::= 'IDENT'
+<inblock> ::= <var_decl_part> <statement>
+<statement_list> ::= <statement_list> ';' <statement>
+                   | <stetement>
+<stetement> ::= <assignment_statement>
+              | <if_stetement>
+              | <while_statement>
+              | <for_statement>
+              | <proc_call_statement>
+              | <null_statement>
+              | <block_statement>
+              | <read_statement>
+              | <write_statement>
+<assignment_statement> ::= 'IDENT' ':=' <expression>
+<if_statement> ::= 'if' <condition> 'then' <statement> <else_statement>
+<else_statement> ::= 'else' <statement>
+                   | /* empty */
+<while_statement> ::= 'while' <condition> 'do' <statement>
+<for_statement> ::= 'for' 'IDENT' ':=' <expression> 
+                    'to' <expression> 'do' <statement>
+<proc_call_statement> ::= <proc_call_name> '(' ')'
+<proc_call_name> ::= 'IDENT'
+<block_statement> ::= 'begin' <statement_list> 'end'
+<read_statement> ::= 'read' '(' 'IDENT' ')'
+<write_statement> ::= 'write' '(' <expression> ')'
+<null_statement> ::= /* empty */
+<condition> ::= <expression> '=' <expression>
+              | <expression> '<>' <expression>
+              | <expression> '<' <expression>
+              | <expression> '<=' <expression>
+              | <expression> '>' <expression>
+              | <expression> '>=' <expression>
+<expression> ::= <term>
+               | '-' <term>
+               | <expression> '+' <term>
+               | <expression> '-' <term>
+<term> ::= <factor>
+         | <term> '*' <factor>
+         | <term> 'div' <factor>
+<factor> ::= <var_name>
+           | <number>
+           | '(' <expression> ')'
+<var_name> ::= 'IDENT'
+<number> ::= 'NUMBER'
+<id_list> ::= 'IDENT'
+            | <id_list> ',' 'IDENT'
+\end{verbatim}
+\end{oframed}
+
+構文解析をするための記述が完了した状態でcompiler.pyを実行すると,初期実行時にだけ以下のメッセージが表示される.
+\begin{oframed}
+\begin{verbatim}
+python3 compiler.py pl0a.p
+WARNING: Token 'FUNCTION' defined, but not used
+WARNING: Token 'INTERVAL' defined, but not used
+WARNING: Token 'LBRACKET' defined, but not used
+WARNING: Token 'RBRACKET' defined, but not used
+WARNING: There are 4 unused tokens
+Generating LALR tables
+WARNING: 1 shift/reduce conflict
+\end{verbatim}
+\end{oframed}
+
+上記のメッセージからshift/reduce conflictが1つ存在していることが分かった.
+そこで,実行時に生成されたparser.outを確認すると,以下のような記述が確認できた.
+\begin{oframed}
+\begin{verbatim}
+state 85
+
+    (28) if_statement -> IF condition THEN statement . else_statement
+    (29) else_statement -> . ELSE statement
+    (30) else_statement -> .
+
+  ! shift/reduce conflict for ELSE resolved as shift
+    ELSE            shift and go to state 104
+    PERIOD          reduce using rule 30 (else_statement -> .)
+    END             reduce using rule 30 (else_statement -> .)
+    SEMICOLON       reduce using rule 30 (else_statement -> .)
+
+  ! ELSE            [ reduce using rule 30 (else_statement -> .) ]
+
+    else_statement                 shift and go to state 103
+\end{verbatim}
+\end{oframed}
+この記述によると,上記の場面でELSEを読んだ際にshift操作を行う選択肢とreduce操作を行う選択肢が存在するため,どちらのルールを適用すれば良いか曖昧な構文規則となっていることが分かる.
+\end{document}

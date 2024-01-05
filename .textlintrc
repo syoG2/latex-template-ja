@@ -24,10 +24,10 @@
                 "strict": false,
                 "allow": ["も", "や", "にも"],
                 "separatorCharacters": [
-                    "．", "。"
+                    ".", "。"
                 ],
                 "commaCharacters": [
-                    "、", "，"
+                    "、", ","
                 ]
             },
             "no-doubled-conjunction": true,
@@ -40,7 +40,7 @@
             "ja-no-successive-word": true,
             "ja-no-weak-phrase": true,
             "ja-no-mixed-period": {
-                "periodMark": "．",
+                "periodMark": ".",
                 "allowPeriodMarks": [],
                 "allowEmojiAtEnd": false,
                 "forceAppendPeriod": true
